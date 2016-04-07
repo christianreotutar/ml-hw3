@@ -166,18 +166,12 @@ class CollapsedSampler(GibbsSampler):
         # TODO depends on x
 
         prob_z_k = [0 for _ in range(self._K)]
-        #for k in range(self._K):
-        #    first_term = float( in_data.get_n_d_k(in_d, k) + self._a ) / float( in_data.get_n_d_star(in_d) + ( self._K * self._a ) )
-
-        #    word = self._train[in_d][in_i + 1] #TODO might be a problem
-        #    second_term = float( in_data.get_n_k_w(k, word) + self._b ) / float( in_data.get_n_k_star(k) + ( in_data.get_V() * self._b) )
-        #    prob_z_k.append(first_term * second_term)
         for k in range(self._K):
             first_term = float( in_data.get_n_d_k(in_d, k) + self._a ) / float( in_data.get_n_d_star(in_d) + ( self._K * self._a ) )
 
-            word = self._train[in_d][in_i + 1] #TODO might be a problem
+            word = self._train[in_d][in_i + 1] #TODO only works train
             second_term = float( in_data.get_n_k_w(k, word) + self._b ) / float( in_data.get_n_k_star(k) + ( in_data.get_V() * self._b) )
-            prob_z_k.append(first_term * second_term)
+            prob_z_k[k] = first_term * second_term
 
         pdb.set_trace()
         return 
@@ -193,3 +187,22 @@ class CollapsedSampler(GibbsSampler):
         p0 = float( 1 - self._lambda ) * float(in_data.get_n_k_w(in_z_d_i, word) + self._beta) / float( data.get_n_k_w + data.get_V() * self._beta )
         p1 = float(self._lambda) * float(data.get_c_k_w + self._beta) / float( data.get_n_c_k_star + data.get_V() * self._beta )
         return
+
+    '''
+        Samples from a probability distribution by uniformly
+        sampling from the cdf.
+        @param prob_dist    List of probabilities
+    '''
+    def sample(prob_dist):
+        prob_sum = sum(prob_dist)
+
+        if (prob_sum == 0):
+            print("Unusually small probability distribution")
+
+        choice = random.uniform(0, prob_sum)
+        running_sum = prob_sum
+        for i in range(len(prob_dist)):
+            if (running_sum <= choice):
+                return i
+
+            running_sum -= prob_dist[i]
