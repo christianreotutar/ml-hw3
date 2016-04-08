@@ -14,7 +14,7 @@ run:
 	./collapsed-sampler input-train.txt input-test.txt output.txt 10 0.5 0.1 0.01 1100 1000
 
 test: 
-	./collapsed-sampler input-train.txt input-test.txt output.txt 10 0.5 0.1 0.01 300 200
+	python -m cProfile driver.py input-train.txt input-test.txt output.txt 10 0.5 0.1 0.01 300 200
 
 pypy:
 	./pypy.exe driver.py input-train.txt input-test.txt output.txt 10 0.5 0.1 0.01 300 200

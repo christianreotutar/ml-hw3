@@ -1,5 +1,5 @@
 from gibbs_sampler import GibbsSampler
-from data import TrainData, TestData
+from data import Data
 import random, pdb, math
 
 '''
@@ -81,6 +81,7 @@ class CollapsedSampler(GibbsSampler):
                 # TODO
                 pass
 
+            print("going through test")
             # go through all testing documents
             for d in range(len(self._test)):
                 line = self._test[d]
@@ -99,6 +100,11 @@ class CollapsedSampler(GibbsSampler):
                     xdi_val = self.sample(xdi_prob)
                     # update counts to include this token
                     # TODO
+
+            # TODO is this true?
+            self._test_data.set_theta(self._train_data._theta)
+            self._test_data.set_phi(self._train_data._phi)
+            self._test_data.set_phi_c(self._train_data._phi_c)
                     
             # compute train log-likelihood described in 3.0.1
             log_prob = self.compute_log_likelihood(self._train_data)
@@ -111,101 +117,75 @@ class CollapsedSampler(GibbsSampler):
     '''
     def initialize_values(self):
 
-        # training
-        train_vocab = set()
-        train_x, train_z = [], []       # x and z values
-        train_nwk_map = []              # c x k x w array for num counts
+        raw_datas = [self._train, self._test]
+        datas = []
 
-        # for all corpuses
-        for c in range(self._c):
-            train_nwk_map.append([])
-            # for all topics
+        for raw_data in raw_datas:
+            _vocab = set()
+            _x, _z = [], []         # x and z values
+            _nwk_map = []           # c x k x w array for num counts
+            _nwk_map_star = []      # c x k x i array for num counts !!
+            _ndk_map = []           # d x k array for num counts
+
+            # for all corpuses
+            for c in range(self._c):
+                _nwk_map.append([])
+                _nwk_map_star.append([]) # !!
+                # for all topics
+                for k in range(self._K):
+                    _nwk_map[c].append({})
+                    _nwk_map_star[c].append([]) # !!
+
+            # for every line in the raw data
+            for line in raw_data:
+                c = int(line[0])
+                tokens = line[1:]
+                doc_x = []
+                doc_z = []
+
+                _ndk_map.append([0 for _ in range(self._K)])
+
+                for token in tokens:
+                    _vocab.add(token)
+                    doc_x.append(random.randint(0, 1))
+                    z = random.randint(0, self._K - 1)
+                    doc_z.append(z)
+
+                    # update ndk map
+                    _ndk_map[-1][z] = _ndk_map[-1][z] + 1
+
+                    # update nwk map
+                    if (token not in _nwk_map[c][z]):
+                        _nwk_map[c][z][token] = 0
+                    _nwk_map[c][z][token] = _nwk_map[c][z][token] + 1
+
+                    # update nwk_map_star
+                    _nwk_map_star[c][z].append(z) # !!
+
+                _x.append(doc_x)
+                _z.append(doc_z)
+
+            # create theta, d x k
+            theta = []
+            for d in range(len(raw_data)):
+                theta.append([0.0 for _ in range(self._K)])
+
+            # create phi, k x w
+            phi = []
             for k in range(self._K):
-                train_nwk_map[c].append({})
+                phi.append([0.0 for _ in range(len(_vocab))])
 
-        for line in self._train:
-            c = int(line[0])
-            tokens = line[1:]
-            doc_x = []
-            doc_z = []
-            for token in tokens:
-                train_vocab.add(token)
-                doc_x.append(random.randint(0, 1))
-                z = random.randint(0, self._K - 1)
-                doc_z.append(z)
-
-                if (token not in train_nwk_map[c][z]):
-                    train_nwk_map[c][z][token] = 0
-                train_nwk_map[c][z][token] = train_nwk_map[c][z][token] + 1
-
-            train_x.append(doc_x)
-            train_z.append(doc_z)
-
-        # create theta, d x k
-        theta = []
-        for d in range(len(self._train)):
-            theta.append([0.0 for _ in range(self._K)])
-
-        # create phi, k x w
-        phi = []
-        for k in range(self._K):
-            phi.append([0.0 for _ in range(len(train_vocab))])
-
-        # create phi_c, c x k x w
-        phi_c = []
-        for c in range(self._c):
-            phi_c.append([])
-            for k in range(self._K):
-                phi_c[c].append([0.0 for _ in range(len(train_vocab))])
-            
-        self._train_data = TrainData(self._train, list(train_vocab), train_x, train_z, train_nwk_map, theta, phi, phi_c)
-
-        # testing
-        test_vocab = set()
-        test_x, test_z = [], []
-        test_nwk_map = []
-
-        for c in range(self._c):
-            test_nwk_map.append([])
-            for k in range(self._K):
-                test_nwk_map[c].append({})
-
-        for line in self._test:
-            c = int(line[0])
-            tokens = line[1:]
-            doc_x = []
-            doc_z = []
-            for token in tokens:
-                test_vocab.add(token)
-                test_x.append(random.randint(0, 1))
-                z = random.randint(0, self._K - 1)
-                test_z.append(z)
-
-                if (token not in test_nwk_map[c][z]):
-                    test_nwk_map[c][z][token] = 0
-                test_nwk_map[c][z][token] = test_nwk_map[c][z][token] + 1
-
-            test_x.append(doc_x)
-            test_z.append(doc_z)
-
-        # create theta, d x k
-        test_theta = []
-        for d in range(len(self._train)):
-            test_theta.append([0.0 for _ in range(self._K)])
-
-        # create phi, k x w
-        test_phi = []
-        for k in range(self._K):
-            test_phi.append([0.0 for _ in range(len(train_vocab))])
-
-        # create phi_c, c x k x w
-        test_phi_c = []
-        for c in range(self._c):
-            test_phi_c.append([])
-            for k in range(self._K):
-                test_phi_c[c].append([0.0 for _ in range(len(train_vocab))])
-
-        self._test_data = TestData(self._test, list(test_vocab), test_x, test_z, test_nwk_map, test_theta, test_phi, test_phi_c)
+            # create phi_c, c x k x w
+            phi_c = []
+            for c in range(self._c):
+                phi_c.append([])
+                for k in range(self._K):
+                    phi_c[c].append([0.0 for _ in range(len(_vocab))])
+                
+            _data = Data(raw_data, list(_vocab), _x, _z, _ndk_map, _nwk_map, _nwk_map_star, theta, phi, phi_c) # !!
+            datas.append(_data)
+        self._train_data = datas[0]
+        self._test_data = datas[1]
         return
 
     '''
@@ -304,15 +284,17 @@ class CollapsedSampler(GibbsSampler):
     '''
         Calculates the log likelihood according to Eq 8
     '''
-    def calculate_log_likelihood(self, in_data):
+    def compute_log_likelihood(self, in_data):
         ret = 0
         for d in range(len(in_data.get_raw_data())):
             c = int(in_data.get_raw_data()[d][0])
-            for i in range(len(in_data.get_raw_data()[d]) - 1):
+            for i in range(1, len(in_data.get_raw_data()[d])):
                 log_term = 0
                 for z in range(self._K):
                     #TODO map i to a word idx
-                    log_term += in_data.get_theta_d_k(d, k) * ((1 - self._l) * in_data.get_phi_k_w(z, i) + self._l * in_data.get_phi_ck_w(c, z, i))
+                    log_term += in_data.get_theta_d_k(d, z) * ((1 - self._l) * in_data.get_phi_k_w(z, i) + self._l * in_data.get_phi_ck_w(c, z, i))
+                if (log_term == 0):
+                    pdb.set_trace()
                 log_term = math.log(log_term)
                 ret += log_term
         return ret

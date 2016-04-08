@@ -1,8 +1,31 @@
 import pdb
 
 class Data:
-    def __init__(self):
-        raise NotImplementedError
+    '''
+        Creates a new Data instance
+        @param in_raw_data list of strings, raw training data
+        @param in_vocab list of unique strings
+        @param in_x 2d arr of dimension (d x # tokens in d)
+        @param in_z 2d arr of dimension (d x # tokens in d)
+        @param in_nwk_map   list (dim c) of list (dim K) of hashmaps (token -> freq)
+        @param in_nwk_map_star (c x K x # total tokens in K)
+        @param in_theta list of lists (d x k)
+        @param in_phi   list of lists (k x w)
+        @param in_phi_c list of lists (k x w)
+    '''
+    def __init__(self, in_raw_data, in_vocab, in_x, in_z, in_ndk_map, in_nwk_map, in_nwk_map_star, in_theta, in_phi, in_phi_c):
+        self._raw_data = in_raw_data
+        self._vocab = in_vocab  
+        self._V = len(in_vocab)
+        self._x = in_x
+        self._z = in_z
+        self._ndk_map = in_ndk_map
+        self._nwk_map = in_nwk_map
+        self._nwk_map_star = in_nwk_map_star
+
+        self._theta = in_theta
+        self._phi = in_phi
+        self._phi_c = in_phi_c
 
     '''
         Gets the raw training/testing data
@@ -146,12 +169,7 @@ class Data:
         if type(k) is not int:
             raise Exception("k not of type int")
 
-        # TODO optimize
-        count = 0
-        for class_desig in self._z[d]:
-            if (class_desig == k):
-                count += 1
-        return count
+        return self._ndk_map[d][k]
 
     '''
         Gets number of tokens in doc d assigned to any class
@@ -211,6 +229,7 @@ class Data:
 
         return self._nwk_map[in_c][in_k][in_w]
 
+
     '''
         Get the number of tokens of all types assigned to k
         @param in_c int corpus to check
@@ -224,7 +243,7 @@ class Data:
         if (in_k >= len(self._nwk_map[in_c])):
             raise Exception("incorrect index k: " + str(in_k))
 
-        return sum(self._nwk_map[in_c][in_k].values())
+        return len(self._nwk_map_star[in_c][in_k])
 
     '''
         Sets the theta
@@ -294,50 +313,15 @@ class Data:
         #TODO check w
         return self._phi_c[in_c][in_k][in_w]
 
-'''
-    Subclass of Data
-    The training data class
-    Different from TestData in that phi is always updated
-'''
-class TrainData(Data):
-
-    '''
-        Creates a new TrainData instance
-        @param in_train list of strings, raw training data
-        @param in_vocab list of unique strings
-        @param in_x 2d arr of dimension (d x # tokens in d)
-        @param in_z 2d arr of dimension (d x # tokens in d)
-        @param in_nwk_map   list (dim c) of list (dim K) of hashmaps (token -> freq)
-        @param in_theta list of lists (d x k)
-        @param in_phi   list of lists (k x w)
-        @param in_phi_c list of lists (k x w)
-    '''
-    def __init__(self, in_train, in_vocab, in_x, in_z, in_nwk_map, in_theta, in_phi, in_phi_c):
-        self._raw_data = in_train
-        self._vocab = in_vocab  
-        self._V = len(in_vocab)
-        self._x = in_x
-        self._z = in_z
-        self._nwk_map = in_nwk_map
-
+    def set_theta(self, in_theta):
         self._theta = in_theta
+
+    def set_phi(self, in_phi):
         self._phi = in_phi
+
+    def set_phi_c(self, in_phi_c):
         self._phi_c = in_phi_c
 
-'''
-    Subclass of Data
-    The testing data class
-    Different from TrainingData in that phi is used from training data
-'''
-class TestData(Data):
-    def __init__(self, in_test, in_vocab, in_x, in_z, in_nwk_map, in_theta, in_phi, in_phi_c):
-        self._raw_data = in_test
-        self._vocab = in_vocab
-        self._V = len(in_vocab)
-        self._x = in_x
-        self._z = in_z
-        self._nwk_map = in_nwk_map
+    def exclude_token(in_d, in_i):
 
-        self._theta = in_theta
-        self._phi = in_phi
-        self._phi_c = in_phi_c
+    def include_token(
