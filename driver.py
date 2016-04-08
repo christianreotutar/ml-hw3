@@ -42,12 +42,12 @@ def read_input():
     f = open(train_file_path)
     train_lines = []
     for line in f.readlines(): 
-        train_lines.append(line)
+        train_lines.append(line.strip().split())
 
     f = open(test_file_path)
     test_lines = []
     for line in f.readlines():
-        test_lines.append(line)
+        test_lines.append(line.strip().split())
 
     return train_lines, test_lines, output_file_path, k, l, a, b, num_iters, num_burn_in
 

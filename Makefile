@@ -22,3 +22,6 @@ pypy:
 
 topwords:
 	python topwords.py output.txt-phi
+
+clean:
+	rm *.pyc
