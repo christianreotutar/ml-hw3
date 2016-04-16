@@ -1,6 +1,6 @@
 from gibbs_sampler import GibbsSampler
 from data import Data
-import random, pdb, math
+import random, pdb, math, sys
 
 '''
     Collapsed Gibbs Sampler
@@ -55,19 +55,30 @@ class CollapsedSampler(GibbsSampler):
                 c = int(line[0])
                 tokens = line[1:]
                 # go through all tokens
-                print("doc " + str(d))
+                #print("doc " + str(d))
+                #print("BEFORE WE LOOP")
+                #print(self._train_data)
                 for i in range(len(tokens)):
                     token = tokens[i]
                     # update counts to exclude this token
-                    # TODO
+                    self._train_data.exclude_token(c, d, i, token) # CORRECT
+                    #print("AFTER EXLUDING")
+                    #print(self._train_data)
                     # sample z_d_i according to Eq. 3
-                    zdi_prob = self.calc_z_d_i(self._train_data, c, d, i)
-                    zdi_class = self.sample(zdi_prob)
+                    curr_x_d_i = self._train_data.get_x_d_i(d, i) # CORRECT
+                    zdi_prob = self.calc_z_d_i(self._train_data, c, d, token, curr_x_d_i) # CORRECT
+                    zdi_class = self.sample(zdi_prob) # CORRECT
+                    self._train_data.set_z_d_i(d, i, zdi_class) # CORRECT
                     # sample x_d_i according to Eq. 4 using above z_d_i
-                    xdi_prob = self.calc_x_d_i(self._train_data, c, d, i, zdi_class)
-                    xdi_val = self.sample(xdi_prob)
+                    xdi_prob = self.calc_x_d_i(self._train_data, c, d, token, zdi_class) # CORRECT
+                    xdi_val = self.sample(xdi_prob) # CORRECT
+                    self._train_data.set_x_d_i(d, i, xdi_val) # CORRECT
                     # update counts to include this token
-                    # TODO
+                    self._train_data.include_token(c, d, i, token, zdi_class, xdi_val) 
+                    #print("AFTER INCLUDING")
+                    #print(self._train_data)
+
+
             print("estimating training")
             # estimate theta according to Eq. 5
             self.estimate_theta(self._train_data)
@@ -81,6 +92,7 @@ class CollapsedSampler(GibbsSampler):
                 # TODO
                 pass
 
+
             print("going through test")
             # go through all testing documents
             for d in range(len(self._test)):
@@ -91,25 +103,31 @@ class CollapsedSampler(GibbsSampler):
                 for i in range(len(tokens)):
                     token = tokens[i]
                     # update counts to exclude this token
-                    # TODO
+                    self._test_data.exclude_token(c, d, i, token)
                     # sample z_d_i according to Eq. 3
-                    zdi_prob = self.calc_z_d_i(self._test_data, c, d, i)
+                    curr_x_d_i = self._test_data.get_x_d_i(d, i)
+                    zdi_prob = self.calc_z_d_i_test(self._test_data, c, d, token, i, curr_x_d_i)
                     zdi_class = self.sample(zdi_prob)
+                    self._test_data.set_z_d_i(d, i, zdi_class)
                     # sample x_d_i according to Eq. 4 using above z_d_i
-                    xdi_prob = self.calc_x_d_i(self._test_data, c, d, i, zdi_class)
+                    xdi_prob = self.calc_x_d_i_test(self._test_data, c, d, token, i, zdi_class)
                     xdi_val = self.sample(xdi_prob)
+                    self._test_data.set_x_d_i(d, i, xdi_val)
                     # update counts to include this token
-                    # TODO
+                    self._test_data.include_token(c, d, i, token, zdi_class, xdi_val)
 
-            # TODO is this true?
-            self._test_data.set_theta(self._train_data._theta)
+            print ("estimating theta param for test")
+            self.estimate_theta(self._test_data)
             self._test_data.set_phi(self._train_data._phi)
             self._test_data.set_phi_c(self._train_data._phi_c)
                     
             # compute train log-likelihood described in 3.0.1
-            log_prob = self.compute_log_likelihood(self._train_data)
+            train_log_prob = self.compute_log_likelihood(self._train_data)
+            print(train_log_prob)
             # compute test log-likelihood described in 3.0.1
-            log_prob = self.compute_log_likelihood(self._test_data)
+            test_log_prob = self.compute_log_likelihood(self._test_data)
+            print(test_log_prob)
+
         return
 
     '''
@@ -122,6 +140,8 @@ class CollapsedSampler(GibbsSampler):
 
         for raw_data in raw_datas:
             _vocab = set()
+            _vocab_map = {}
+            _vocab_map_idx = 0
             _x, _z = [], []         # x and z values
             _nwk_map = []           # c x k x w array for num counts
             _nwk_map_star = []      # c x k x i array for num counts !!
@@ -134,10 +154,12 @@ class CollapsedSampler(GibbsSampler):
                 # for all topics
                 for k in range(self._K):
                     _nwk_map[c].append({})
-                    _nwk_map_star[c].append([]) # !!
+                    _nwk_map_star[c].append(0) # !!
 
             # for every line in the raw data
+            i = -1
             for line in raw_data:
+                i += 1
                 c = int(line[0])
                 tokens = line[1:]
                 doc_x = []
@@ -146,13 +168,18 @@ class CollapsedSampler(GibbsSampler):
                 _ndk_map.append([0 for _ in range(self._K)])
 
                 for token in tokens:
-                    _vocab.add(token)
+
+                    if token not in _vocab:
+                        _vocab_map[token] = _vocab_map_idx
+                        _vocab_map_idx += 1
+                        _vocab.add(token)
+
                     doc_x.append(random.randint(0, 1))
                     z = random.randint(0, self._K - 1)
                     doc_z.append(z)
 
                     # update ndk map
-                    _ndk_map[-1][z] = _ndk_map[-1][z] + 1
+                    _ndk_map[i][z] = _ndk_map[i][z] + 1
 
                     # update nwk map
                     if (token not in _nwk_map[c][z]):
@@ -160,7 +187,7 @@ class CollapsedSampler(GibbsSampler):
                     _nwk_map[c][z][token] = _nwk_map[c][z][token] + 1
 
                     # update nwk_map_star
-                    _nwk_map_star[c][z].append(z) # !!
+                    _nwk_map_star[c][z] = _nwk_map_star[c][z] + 1 # !!
 
                 _x.append(doc_x)
                 _z.append(doc_z)
@@ -182,10 +209,11 @@ class CollapsedSampler(GibbsSampler):
                 for k in range(self._K):
                     phi_c[c].append([0.0 for _ in range(len(_vocab))])
                 
-            _data = Data(raw_data, list(_vocab), _x, _z, _ndk_map, _nwk_map, _nwk_map_star, theta, phi, phi_c) # !!
+            _data = Data(raw_data, list(_vocab), _x, _z, _ndk_map, _nwk_map, _nwk_map_star, theta, phi, phi_c, _vocab_map) # !!
             datas.append(_data)
         self._train_data = datas[0]
         self._test_data = datas[1]
+
         return
 
     '''
@@ -194,19 +222,59 @@ class CollapsedSampler(GibbsSampler):
         @param in_data  Data object holding data for that set
         @param in_c     int corpus number
         @param in_d     int document number
-        @param in_i     int token number
+        @param in_token     string token
+        @param in_x_d_i     int whether we use corpus or global counts
     '''
-    def calc_z_d_i(self, in_data, in_c, in_d, in_i):
-        # TODO depends on x
+    def calc_z_d_i(self, in_data, in_c, in_d, in_token, in_x_d_i):
         # TODO need to change depending on data (i.e. use phi from train when it's test)
-
+        
         prob_z_k = [0 for _ in range(self._K)]
-        for k in range(self._K):
-            first_term = float( in_data.get_n_d_k(in_d, k) + self._a ) / float( in_data.get_n_d_star(in_d) + ( self._K * self._a ) )
+        word = in_token
+        # USE GLOBAL COUNTS
+        if (in_x_d_i == 0):
+            for k in range(self._K):
+                first_term = float( in_data.get_n_d_k(in_d, k) + self._a ) / float( in_data.get_n_d_star(in_d) + ( self._K * self._a ) )
+                second_term = float( in_data.get_n_k_w(k, word) + self._b ) / float( in_data.get_n_k_star(k) + ( in_data.get_V() * self._b) )
+                prob_z_k[k] = first_term * second_term
+        # USE CORPUS SPECIFIC COUNTS
+        elif (in_x_d_i == 1):
+            for k in range(self._K):
+                first_term = float( in_data.get_n_d_k(in_d, k) + self._a ) / float( in_data.get_n_d_star(in_d) + ( self._K * self._a ) )
+                second_term = float( in_data.get_n_ck_w(in_c, k, word) + self._b ) / float( in_data.get_n_ck_star(in_c, k) + ( in_data.get_V() * self._b) )
+                prob_z_k[k] = first_term * second_term
 
-            word = in_data.get_word(in_d, in_i)
-            second_term = float( in_data.get_n_k_w(k, word) + self._b ) / float( in_data.get_n_k_star(k) + ( in_data.get_V() * self._b) )
-            prob_z_k[k] = first_term * second_term
+        return prob_z_k
+
+
+    '''
+        According to Eq. 3 on assignment page EXCEPT WITH PHI REPLACED FOR THE TEST DATA
+        p(z_d_i) prop to (ndk + a / nd* + Ka) * (nkw + b / nk* + Vb)
+        @param in_data  Data object holding data for that set
+        @param in_c     int corpus number
+        @param in_d     int document number
+        @param in_token     string token
+        @param in_i         ith iteration of dth document
+        @param in_x_d_i     int whether we use corpus or global counts
+    '''
+    def calc_z_d_i_test(self, in_data, in_c, in_d, in_token, in_i, in_x_d_i):
+        # TODO need to change depending on data (i.e. use phi from train when it's test)
+        
+        prob_z_k = [0 for _ in range(self._K)]
+        word = in_token
+        word_idx = in_data.get_word_idx(word)
+        # USE GLOBAL COUNTS
+        if (in_x_d_i == 0):
+            for k in range(self._K):
+                first_term = float( in_data.get_n_d_k(in_d, k) + self._a ) / float( in_data.get_n_d_star(in_d) + ( self._K * self._a ) )
+                second_term = in_data.get_phi_k_w(k, word_idx)
+                prob_z_k[k] = first_term * second_term
+        # USE CORPUS SPECIFIC COUNTS
+        elif (in_x_d_i == 1):
+            for k in range(self._K):
+                first_term = float( in_data.get_n_d_k(in_d, k) + self._a ) / float( in_data.get_n_d_star(in_d) + ( self._K * self._a ) )
+
+                second_term = in_data.get_phi_ck_w(in_c, k, word_idx)
+                prob_z_k[k] = first_term * second_term
 
         return prob_z_k
 
@@ -215,25 +283,43 @@ class CollapsedSampler(GibbsSampler):
         @param data Data object holding data for that set
         @param in_c     int corpus number
         @param in_d     int document number
-        @param in_i     int token number
+        @param in_token     string token
         @param in_z_d_i int class for ith token of doc d chosen
     '''
-    def calc_x_d_i(self, in_data, in_c, in_d, in_i, in_z_d_i):
-        word = in_data.get_word(in_d, in_i)
+    def calc_x_d_i(self, in_data, in_c, in_d, in_token, in_z_d_i):
+        word = in_token
         p0 = float( 1 - self._l ) * float(in_data.get_n_k_w(in_z_d_i, word) + self._b) / float( in_data.get_n_k_star(in_z_d_i) + in_data.get_V() * self._b )
         p1 = float(self._l) * float(in_data.get_n_ck_w(in_c, in_z_d_i, word) + self._b) / float( in_data.get_n_ck_star(in_c, in_z_d_i) + in_data.get_V() * self._b )
+        return [p0, p1]
+
+
+    '''
+        According to Eq. 4 on assignment page EXCEPT PHI IS REPLACED FOR THE TEST
+        @param data Data object holding data for that set
+        @param in_c     int corpus number
+        @param in_d     int document number
+        @param in_token     string token
+        @param in_i         ith iteration of dth document
+        @param in_z_d_i int class for ith token of doc d chosen
+    '''
+    def calc_x_d_i_test(self, in_data, in_c, in_d, in_token, in_i, in_z_d_i):
+        word = in_token
+        word_idx = in_data.get_word_idx(word)
+        p0 = float( 1 - self._l ) * in_data.get_phi_k_w(in_z_d_i, word_idx)
+        p1 = float(self._l) * in_data.get_phi_ck_w(in_c, in_z_d_i, word_idx)
         return [p0, p1]
 
     '''
         Samples from a probability distribution by uniformly
         sampling from the cdf.
         @param prob_dist    List of probabilities
+        @return index
     '''
     def sample(self, prob_dist):
         prob_sum = sum(prob_dist)
 
-        if (prob_sum < math.exp(-20)):
-            print("Unusually small probability distribution")
+        #if (prob_sum < math.exp(-20)):
+        #    print("Unusually small probability distribution")
 
         choice = random.uniform(0, prob_sum)
         running_sum = prob_sum
@@ -242,6 +328,7 @@ class CollapsedSampler(GibbsSampler):
                 return i
 
             running_sum -= prob_dist[i]
+
         return len(prob_dist) - 1
 
     '''
@@ -255,6 +342,9 @@ class CollapsedSampler(GibbsSampler):
                 denom = in_data.get_n_d_star(in_d) + (self._K * self._a)
                 theta_d_k = float(num) / float(denom)
                 in_data.set_theta_d_k(in_d, in_k, theta_d_k)
+                if (theta_d_k < 0):
+                    print("negative theta")
+                    sys.exit(1)
         
     '''
         Estimates phi according to Eq 6
@@ -289,10 +379,15 @@ class CollapsedSampler(GibbsSampler):
         for d in range(len(in_data.get_raw_data())):
             c = int(in_data.get_raw_data()[d][0])
             for i in range(1, len(in_data.get_raw_data()[d])):
+                word = in_data.get_raw_data()[d][i]
                 log_term = 0
                 for z in range(self._K):
-                    #TODO map i to a word idx
-                    log_term += in_data.get_theta_d_k(d, z) * ((1 - self._l) * in_data.get_phi_k_w(z, i) + self._l * in_data.get_phi_ck_w(c, z, i))
+                    #... this is wrong
+                    word_idx = in_data.get_word_idx(word)
+                    log_term += in_data.get_theta_d_k(d, z) * ((1 - self._l) * in_data.get_phi_k_w(z, word_idx) + self._l * in_data.get_phi_ck_w(c, z, word_idx))
+                    if (log_term <= 0):
+                        print("negative log term")
+                        sys.exit(1)
                 if (log_term == 0):
                     pdb.set_trace()
                 log_term = math.log(log_term)

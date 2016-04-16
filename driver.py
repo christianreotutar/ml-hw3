@@ -33,7 +33,7 @@ def read_input():
     test_file_path = sys.argv[2]
     output_file_path = sys.argv[3]
     k = int(sys.argv[4])
-    l = float(sys.argv[5])
+    l = float(sys.argv[5])          # CORRECT
     a = float(sys.argv[6])
     b = float(sys.argv[7])
     num_iters = int(sys.argv[8])

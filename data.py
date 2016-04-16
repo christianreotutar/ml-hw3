@@ -1,4 +1,6 @@
 import pdb
+import numpy
+import sys
 
 class Data:
     '''
@@ -7,13 +9,14 @@ class Data:
         @param in_vocab list of unique strings
         @param in_x 2d arr of dimension (d x # tokens in d)
         @param in_z 2d arr of dimension (d x # tokens in d)
+        @param in_ndk_map   (d x k) list
         @param in_nwk_map   list (dim c) of list (dim K) of hashmaps (token -> freq)
         @param in_nwk_map_star (c x K x # total tokens in K)
         @param in_theta list of lists (d x k)
         @param in_phi   list of lists (k x w)
         @param in_phi_c list of lists (k x w)
     '''
-    def __init__(self, in_raw_data, in_vocab, in_x, in_z, in_ndk_map, in_nwk_map, in_nwk_map_star, in_theta, in_phi, in_phi_c):
+    def __init__(self, in_raw_data, in_vocab, in_x, in_z, in_ndk_map, in_nwk_map, in_nwk_map_star, in_theta, in_phi, in_phi_c, in_vocab_map):
         self._raw_data = in_raw_data
         self._vocab = in_vocab  
         self._V = len(in_vocab)
@@ -26,6 +29,8 @@ class Data:
         self._theta = in_theta
         self._phi = in_phi
         self._phi_c = in_phi_c
+
+        self._vocab_map = in_vocab_map
 
     '''
         Gets the raw training/testing data
@@ -147,7 +152,7 @@ class Data:
         if type(val) is not int:
             raise Exception("Val not of type int")
 
-        self._x[d][i] = val
+        self._z[d][i] = val
 
     '''
         @return int
@@ -243,7 +248,7 @@ class Data:
         if (in_k >= len(self._nwk_map[in_c])):
             raise Exception("incorrect index k: " + str(in_k))
 
-        return len(self._nwk_map_star[in_c][in_k])
+        return self._nwk_map_star[in_c][in_k]
 
     '''
         Sets the theta
@@ -322,6 +327,48 @@ class Data:
     def set_phi_c(self, in_phi_c):
         self._phi_c = in_phi_c
 
-    def exclude_token(in_d, in_i):
+    def exclude_token(self, in_c, in_d, in_i, in_token):
+        in_z = self._z[in_d][in_i]
+        in_x = self._x[in_d][in_i]
 
-    def include_token(
+        if (self._ndk_map[in_d][in_z] - 1 < 0):
+            pdb.set_trace()
+
+        self._ndk_map[in_d][in_z] = self._ndk_map[in_d][in_z] - 1
+        self._nwk_map[in_c][in_z][in_token] = self._nwk_map[in_c][in_z][in_token] - 1
+        self._nwk_map_star[in_c][in_z] = self._nwk_map_star[in_c][in_z] - 1
+
+    def include_token(self, in_c, in_d, in_i, in_token, in_z, in_x):
+        if in_token not in self._nwk_map[in_c][in_z]:
+            self._nwk_map[in_c][in_z][in_token] = 0
+        self._ndk_map[in_d][in_z] = self._ndk_map[in_d][in_z] + 1
+        self._nwk_map[in_c][in_z][in_token] = self._nwk_map[in_c][in_z][in_token] + 1
+        self._nwk_map_star[in_c][in_z] = self._nwk_map_star[in_c][in_z] + 1
+
+    '''
+        @param word     string
+        @return int index of vocab word
+    '''
+    def get_word_idx(self, in_word):
+        return self._vocab_map[in_word]
+
+    def __str__(self):
+        string = "\n"
+        string += "\nRAW DATA:\n" + str(self._raw_data)
+        string += "\nVOCAB:\n" + str(self._vocab)
+        string += "\nV:\n" + str(self._V)
+        string += "\nX:\n" + str(self._x)
+        string += "\nZ:\n" + str(self._z)
+        string += "\nNDK MAP:\n" + str(self._ndk_map)
+        string += "\nNWK MAP:\n" + str(self._nwk_map)
+        string += "\nNWK MAP STAR\n" + str(self._nwk_map_star)
+
+        string += "\nTHETA:\n" + str(self._theta)
+        string += "\nPHI:\n" + str(self._phi)
+        string += "\nPHI_C\n" + str(self._phi_c)
+
+        string += "\nVOCAB MAP:\n" + str(self._vocab_map)
+        return string
+
+    def __repr__(self):
+        return self.__str__()
