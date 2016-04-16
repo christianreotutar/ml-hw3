@@ -1,6 +1,7 @@
 from gibbs_sampler import GibbsSampler
 from data import Data
 import random, pdb, math, sys
+import numpy as np
 
 '''
     Collapsed Gibbs Sampler
@@ -41,15 +42,38 @@ class CollapsedSampler(GibbsSampler):
     def algorithm(self):
         # set all z and x values to random in {0,...,K-1} and {0,1}
         # one per token
-        print("initializing values")
+        #print("initializing values")
         self.initialize_values()
 
-        print("iterating")
+        # TODO REMOVE
+
+        # for d in range(len(self._train)):
+        #     line = self._train[d]
+        #     c = int(line[0])
+        #     tokens = line[1:]
+        #     for i in range(len(tokens)):
+        #         token = tokens[i]
+        #         w = self._train_data.get_word_idx(token)
+        #         x = self._train_data.get_x_d_i(d, i)
+        #         z = self._train_data.get_z_d_i(d, i)
+
+        #         print(token)
+        #         print(self._train_data.get_n_d_k(d, z))
+        #         print(self._train_data.get_n_d_star(d))
+        #         print(self._train_data.get_n_k_w(z, w))
+        #         print(self._train_data.get_n_k_star(z))
+        #         print(self._train_data.get_n_ck_w(c, z, w))
+        #         print(self._train_data.get_n_ck_star(c, z))
+        #         print("")
+        #         pdb.set_trace()
+        #         sys.exit(0)
+
+        #print("iterating")
         # go through T iterations
         for t in range(1, self._num_iters + 1):
-            print("iteration " + str(t))
+            #print("iteration " + str(t))
             # go through all training documents
-            print("going through training docs")
+            #print("going through training docs")
             for d in range(len(self._train)):
                 line = self._train[d]
                 c = int(line[0])
@@ -72,6 +96,7 @@ class CollapsedSampler(GibbsSampler):
                     # sample x_d_i according to Eq. 4 using above z_d_i
                     xdi_prob = self.calc_x_d_i(self._train_data, c, d, token, zdi_class) # CORRECT
                     xdi_val = self.sample(xdi_prob) # CORRECT
+                    #print(xdi_val)
                     self._train_data.set_x_d_i(d, i, xdi_val) # CORRECT
                     # update counts to include this token
                     self._train_data.include_token(c, d, i, token, zdi_class, xdi_val) 
@@ -79,7 +104,7 @@ class CollapsedSampler(GibbsSampler):
                     #print(self._train_data)
 
 
-            print("estimating training")
+            #print("estimating training")
             # estimate theta according to Eq. 5
             self.estimate_theta(self._train_data)
             # estimate phi according to Eq. 6
@@ -93,7 +118,7 @@ class CollapsedSampler(GibbsSampler):
                 pass
 
 
-            print("going through test")
+            #print("going through test")
             # go through all testing documents
             for d in range(len(self._test)):
                 line = self._test[d]
@@ -116,7 +141,7 @@ class CollapsedSampler(GibbsSampler):
                     # update counts to include this token
                     self._test_data.include_token(c, d, i, token, zdi_class, xdi_val)
 
-            print ("estimating theta param for test")
+            #print ("estimating theta param for test")
             self.estimate_theta(self._test_data)
             self._test_data.set_phi(self._train_data._phi)
             self._test_data.set_phi_c(self._train_data._phi_c)
@@ -143,19 +168,28 @@ class CollapsedSampler(GibbsSampler):
             _vocab_map = {}
             _vocab_map_idx = 0
             _x, _z = [], []         # x and z values
-            _nwk_map = []           # c x k x w array for num counts
-            _nwk_map_star = []      # c x k x i array for num counts !!
+            _nckw_map = []           # c x k x w array for num counts
+            _nckw_map_star = []      # c x k x i array for num counts !!
             _ndk_map = []           # d x k array for num counts
+
+            # create vocab
+            for line in raw_data:
+                tokens = line[1:]
+                for token in tokens:
+                    if token not in _vocab:
+                        _vocab_map[token] = _vocab_map_idx
+                        _vocab_map_idx += 1
+                        _vocab.add(token)
 
             # for all corpuses
             for c in range(self._c):
-                _nwk_map.append([])
-                _nwk_map_star.append([]) # !!
+                _nckw_map.append([])
+                _nckw_map_star.append([]) # !!
                 # for all topics
                 for k in range(self._K):
-                    _nwk_map[c].append({})
-                    _nwk_map_star[c].append(0) # !!
-
+                    _nckw_map[c].append([0 for _ in range(len(_vocab_map))])
+                    _nckw_map_star[c].append(0) # !!
+            
             # for every line in the raw data
             i = -1
             for line in raw_data:
@@ -166,15 +200,9 @@ class CollapsedSampler(GibbsSampler):
                 doc_z = []
 
                 _ndk_map.append([0 for _ in range(self._K)])
-
                 for token in tokens:
-
-                    if token not in _vocab:
-                        _vocab_map[token] = _vocab_map_idx
-                        _vocab_map_idx += 1
-                        _vocab.add(token)
-
-                    doc_x.append(random.randint(0, 1))
+                    x_val = random.randint(0, 1)
+                    doc_x.append(x_val)
                     z = random.randint(0, self._K - 1)
                     doc_z.append(z)
 
@@ -182,12 +210,11 @@ class CollapsedSampler(GibbsSampler):
                     _ndk_map[i][z] = _ndk_map[i][z] + 1
 
                     # update nwk map
-                    if (token not in _nwk_map[c][z]):
-                        _nwk_map[c][z][token] = 0
-                    _nwk_map[c][z][token] = _nwk_map[c][z][token] + 1
+                    token_idx = _vocab_map[token]
+                    _nckw_map[c][z][token_idx] = _nckw_map[c][z][token_idx] + 1
 
-                    # update nwk_map_star
-                    _nwk_map_star[c][z] = _nwk_map_star[c][z] + 1 # !!
+                    # update nckw_map_star
+                    _nckw_map_star[c][z] = _nckw_map_star[c][z] + 1 # !!
 
                 _x.append(doc_x)
                 _z.append(doc_z)
@@ -209,7 +236,7 @@ class CollapsedSampler(GibbsSampler):
                 for k in range(self._K):
                     phi_c[c].append([0.0 for _ in range(len(_vocab))])
                 
-            _data = Data(raw_data, list(_vocab), _x, _z, _ndk_map, _nwk_map, _nwk_map_star, theta, phi, phi_c, _vocab_map) # !!
+            _data = Data(raw_data, list(_vocab), _x, _z, _ndk_map, _nckw_map, _nckw_map_star, theta, phi, phi_c, _vocab_map) # !!
             datas.append(_data)
         self._train_data = datas[0]
         self._test_data = datas[1]
@@ -229,18 +256,18 @@ class CollapsedSampler(GibbsSampler):
         # TODO need to change depending on data (i.e. use phi from train when it's test)
         
         prob_z_k = [0 for _ in range(self._K)]
-        word = in_token
+        word_idx = in_data.get_word_idx(in_token)
         # USE GLOBAL COUNTS
         if (in_x_d_i == 0):
             for k in range(self._K):
                 first_term = float( in_data.get_n_d_k(in_d, k) + self._a ) / float( in_data.get_n_d_star(in_d) + ( self._K * self._a ) )
-                second_term = float( in_data.get_n_k_w(k, word) + self._b ) / float( in_data.get_n_k_star(k) + ( in_data.get_V() * self._b) )
+                second_term = float( in_data.get_n_k_w(k, word_idx) + self._b ) / float( in_data.get_n_k_star(k) + ( in_data.get_V() * self._b) )
                 prob_z_k[k] = first_term * second_term
         # USE CORPUS SPECIFIC COUNTS
         elif (in_x_d_i == 1):
             for k in range(self._K):
                 first_term = float( in_data.get_n_d_k(in_d, k) + self._a ) / float( in_data.get_n_d_star(in_d) + ( self._K * self._a ) )
-                second_term = float( in_data.get_n_ck_w(in_c, k, word) + self._b ) / float( in_data.get_n_ck_star(in_c, k) + ( in_data.get_V() * self._b) )
+                second_term = float( in_data.get_n_ck_w(in_c, k, word_idx) + self._b ) / float( in_data.get_n_ck_star(in_c, k) + ( in_data.get_V() * self._b) )
                 prob_z_k[k] = first_term * second_term
 
         return prob_z_k
@@ -257,8 +284,6 @@ class CollapsedSampler(GibbsSampler):
         @param in_x_d_i     int whether we use corpus or global counts
     '''
     def calc_z_d_i_test(self, in_data, in_c, in_d, in_token, in_i, in_x_d_i):
-        # TODO need to change depending on data (i.e. use phi from train when it's test)
-        
         prob_z_k = [0 for _ in range(self._K)]
         word = in_token
         word_idx = in_data.get_word_idx(word)
@@ -287,9 +312,9 @@ class CollapsedSampler(GibbsSampler):
         @param in_z_d_i int class for ith token of doc d chosen
     '''
     def calc_x_d_i(self, in_data, in_c, in_d, in_token, in_z_d_i):
-        word = in_token
-        p0 = float( 1 - self._l ) * float(in_data.get_n_k_w(in_z_d_i, word) + self._b) / float( in_data.get_n_k_star(in_z_d_i) + in_data.get_V() * self._b )
-        p1 = float(self._l) * float(in_data.get_n_ck_w(in_c, in_z_d_i, word) + self._b) / float( in_data.get_n_ck_star(in_c, in_z_d_i) + in_data.get_V() * self._b )
+        word_idx = in_data.get_word_idx(in_token)
+        p0 = float( 1 - self._l ) * float(in_data.get_n_k_w(in_z_d_i, word_idx) + self._b) / float( in_data.get_n_k_star(in_z_d_i) + in_data.get_V() * self._b )
+        p1 = float(self._l) * float(in_data.get_n_ck_w(in_c, in_z_d_i, word_idx) + self._b) / float( in_data.get_n_ck_star(in_c, in_z_d_i) + in_data.get_V() * self._b )
         return [p0, p1]
 
 
@@ -316,6 +341,8 @@ class CollapsedSampler(GibbsSampler):
         @return index
     '''
     def sample(self, prob_dist):
+        '''
+        # TODO maybe sample can be changed
         prob_sum = sum(prob_dist)
 
         #if (prob_sum < math.exp(-20)):
@@ -330,6 +357,13 @@ class CollapsedSampler(GibbsSampler):
             running_sum -= prob_dist[i]
 
         return len(prob_dist) - 1
+        '''
+        prob_sum = sum(prob_dist)
+        if (prob_sum == 0):
+            prob_sum = 1
+        prob_dist_norm = [prob / float(prob_sum) for prob in prob_dist]
+        sampl = np.random.multinomial(1, prob_dist_norm)
+        return np.ndarray.tolist(sampl).index(1)
 
     '''
         Estimates theta according to Eq 5
@@ -353,8 +387,7 @@ class CollapsedSampler(GibbsSampler):
     def estimate_phi(self, in_data):
         for in_k in range(self._K):
             for in_w in range(len(in_data.get_vocab())):
-                word = in_data.get_vocab()[in_w]
-                num = in_data.get_n_k_w(in_k, word) + self._b
+                num = in_data.get_n_k_w(in_k, in_w) + self._b
                 denom = in_data.get_n_k_star(in_k) + (in_data.get_V() * self._b)
                 in_data.set_phi_k_w(in_k, in_w, float(num)/float(denom))
 
@@ -366,8 +399,7 @@ class CollapsedSampler(GibbsSampler):
         for in_c in range(self._c):
             for in_k in range(self._K):
                 for in_w in range(len(in_data.get_vocab())):
-                    word = in_data.get_vocab()[in_w]
-                    num = in_data.get_n_ck_w(in_c, in_k, word) + self._b
+                    num = in_data.get_n_ck_w(in_c, in_k, in_w) + self._b
                     denom = in_data.get_n_ck_star(in_c, in_k) + (in_data.get_V() * self._b)
                     in_data.set_phi_ck_w(in_c, in_k, in_w, float(num) / float(denom))
 
@@ -380,16 +412,13 @@ class CollapsedSampler(GibbsSampler):
             c = int(in_data.get_raw_data()[d][0])
             for i in range(1, len(in_data.get_raw_data()[d])):
                 word = in_data.get_raw_data()[d][i]
+                word_idx = in_data.get_word_idx(word)
                 log_term = 0
                 for z in range(self._K):
-                    #... this is wrong
-                    word_idx = in_data.get_word_idx(word)
                     log_term += in_data.get_theta_d_k(d, z) * ((1 - self._l) * in_data.get_phi_k_w(z, word_idx) + self._l * in_data.get_phi_ck_w(c, z, word_idx))
                     if (log_term <= 0):
                         print("negative log term")
                         sys.exit(1)
-                if (log_term == 0):
-                    pdb.set_trace()
                 log_term = math.log(log_term)
                 ret += log_term
         return ret

@@ -19,6 +19,9 @@ dumb:
 
 
 test: 
+	python driver.py input-train.txt input-test.txt output.txt 10 0.5 0.1 0.01 300 200
+
+profile: 
 	python -m cProfile driver.py input-train.txt input-test.txt output.txt 10 0.5 0.1 0.01 300 200
 
 pypy:
@@ -32,4 +35,4 @@ clean:
 	rm *.pyc
 
 small:
-	python driver.py small_train.txt small_test.txt output.txt 10 0.5 0.1 0.01 300 200
+	/home/user-pp/Downloads/pypy-5.0.1-linux/bin/pypy driver.py small_train.txt small_test.txt output.txt 10 0.5 0.1 0.01 300 200

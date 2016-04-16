@@ -10,21 +10,21 @@ class Data:
         @param in_x 2d arr of dimension (d x # tokens in d)
         @param in_z 2d arr of dimension (d x # tokens in d)
         @param in_ndk_map   (d x k) list
-        @param in_nwk_map   list (dim c) of list (dim K) of hashmaps (token -> freq)
-        @param in_nwk_map_star (c x K x # total tokens in K)
+        @param in_nckw_map   list (dim c) of list (dim K) of hashmaps (token -> freq)
+        @param in_nckw_map_star (c x K x # total tokens in K)
         @param in_theta list of lists (d x k)
         @param in_phi   list of lists (k x w)
         @param in_phi_c list of lists (k x w)
     '''
-    def __init__(self, in_raw_data, in_vocab, in_x, in_z, in_ndk_map, in_nwk_map, in_nwk_map_star, in_theta, in_phi, in_phi_c, in_vocab_map):
+    def __init__(self, in_raw_data, in_vocab, in_x, in_z, in_ndk_map, in_nckw_map, in_nckw_map_star, in_theta, in_phi, in_phi_c, in_vocab_map):
         self._raw_data = in_raw_data
         self._vocab = in_vocab  
         self._V = len(in_vocab)
         self._x = in_x
         self._z = in_z
         self._ndk_map = in_ndk_map
-        self._nwk_map = in_nwk_map
-        self._nwk_map_star = in_nwk_map_star
+        self._nckw_map = in_nckw_map
+        self._nckw_map_star = in_nckw_map_star
 
         self._theta = in_theta
         self._phi = in_phi
@@ -192,13 +192,13 @@ class Data:
     '''
         Get the number of tokens of type w assigned to k
         @param in_k int class of the token we're matching
-        @param in_w string word of the token we're matching
+        @param in_w_idx int word of the token we're matching
     '''
-    def get_n_k_w(self, in_k, in_w):
+    def get_n_k_w(self, in_k, in_w_idx):
 
         num = 0
-        for c in range(len(self._nwk_map)):
-            num += self.get_n_ck_w(c, in_k, in_w)
+        for c in range(len(self._nckw_map)):
+            num += self.get_n_ck_w(c, in_k, in_w_idx)
 
         return num
 
@@ -209,7 +209,7 @@ class Data:
     def get_n_k_star(self, in_k):
 
         num = 0
-        for c in range(len(self._nwk_map)):
+        for c in range(len(self._nckw_map)):
             num += self.get_n_ck_star(c, in_k)
         
         return num
@@ -218,21 +218,21 @@ class Data:
         Get the number of tokens of type w assigned to k
         @param in_c int corpus to check
         @param in_k int class of the token we're matching
-        @param in_w string word of the token we're matching
+        @param in_w_idx index of the word of the token we're matching
     '''
-    def get_n_ck_w(self, in_c, in_k, in_w):
-        if (in_c >= len(self._nwk_map)):
+    def get_n_ck_w(self, in_c, in_k, in_w_idx):
+        if (in_c >= len(self._nckw_map)):
             pdb.set_trace()
             raise Exception("incorrect index c: " + str(in_c))
 
-        if (in_k >= len(self._nwk_map[in_c])):
+        if (in_k >= len(self._nckw_map[in_c])):
             raise Exception("incorrect index k: " + str(in_k))
 
-        if (in_w not in self._nwk_map[in_c][in_k]):
+        if (in_w_idx >= len(self._nckw_map[in_c][in_k])):
             # should this happen?
             return 0
 
-        return self._nwk_map[in_c][in_k][in_w]
+        return self._nckw_map[in_c][in_k][in_w_idx]
 
 
     '''
@@ -242,13 +242,13 @@ class Data:
     '''
     def get_n_ck_star(self, in_c, in_k):
 
-        if (in_c >= len(self._nwk_map)):
+        if (in_c >= len(self._nckw_map)):
             raise Exception("incorrect index c: " + str(in_c))
         
-        if (in_k >= len(self._nwk_map[in_c])):
+        if (in_k >= len(self._nckw_map[in_c])):
             raise Exception("incorrect index k: " + str(in_k))
 
-        return self._nwk_map_star[in_c][in_k]
+        return self._nckw_map_star[in_c][in_k]
 
     '''
         Sets the theta
@@ -331,19 +331,22 @@ class Data:
         in_z = self._z[in_d][in_i]
         in_x = self._x[in_d][in_i]
 
+        token_idx = self._vocab_map[in_token]
+
         if (self._ndk_map[in_d][in_z] - 1 < 0):
             pdb.set_trace()
 
         self._ndk_map[in_d][in_z] = self._ndk_map[in_d][in_z] - 1
-        self._nwk_map[in_c][in_z][in_token] = self._nwk_map[in_c][in_z][in_token] - 1
-        self._nwk_map_star[in_c][in_z] = self._nwk_map_star[in_c][in_z] - 1
+        self._nckw_map[in_c][in_z][token_idx] = self._nckw_map[in_c][in_z][token_idx] - 1
+        self._nckw_map_star[in_c][in_z] = self._nckw_map_star[in_c][in_z] - 1
 
     def include_token(self, in_c, in_d, in_i, in_token, in_z, in_x):
-        if in_token not in self._nwk_map[in_c][in_z]:
-            self._nwk_map[in_c][in_z][in_token] = 0
+
+        token_idx = self._vocab_map[in_token]
+
         self._ndk_map[in_d][in_z] = self._ndk_map[in_d][in_z] + 1
-        self._nwk_map[in_c][in_z][in_token] = self._nwk_map[in_c][in_z][in_token] + 1
-        self._nwk_map_star[in_c][in_z] = self._nwk_map_star[in_c][in_z] + 1
+        self._nckw_map[in_c][in_z][token_idx] = self._nckw_map[in_c][in_z][token_idx] + 1
+        self._nckw_map_star[in_c][in_z] = self._nckw_map_star[in_c][in_z] + 1
 
     '''
         @param word     string
@@ -360,8 +363,8 @@ class Data:
         string += "\nX:\n" + str(self._x)
         string += "\nZ:\n" + str(self._z)
         string += "\nNDK MAP:\n" + str(self._ndk_map)
-        string += "\nNWK MAP:\n" + str(self._nwk_map)
-        string += "\nNWK MAP STAR\n" + str(self._nwk_map_star)
+        string += "\nNCKW MAP:\n" + str(self._nckw_map)
+        string += "\nNCKW MAP STAR\n" + str(self._nckw_map_star)
 
         string += "\nTHETA:\n" + str(self._theta)
         string += "\nPHI:\n" + str(self._phi)
